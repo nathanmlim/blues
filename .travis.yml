@@ -63,17 +63,10 @@ after_success:
 - codecov
 - test $TRAVIS_BRANCH = "master" && chmod +x  ./devtools/conda-recipe/conda_upload.sh
 before_deploy:
-  # Parse Github Tag into BASH array
-  - IFS="- " read -r -a GIT <<< `git describe --tags`
+# Parse Github Tag into BASH array
+- IFS="- " read -r -a GIT <<< `git describe --tags`
 
-  - if ${RELEASE} ; then
-      echo 'Deploying RELEASE build'
-      LABEL='main' && TRAVIS_TAG=${GIT[0]}
-      git tag ${TRAVIS_TAG}
-    else
-      echo 'Deploying DEV build'
-      LABEL='dev'
-    fi
+- if ${RELEASE} ; then echo 'Deploying RELEASE build' && LABEL='main' && TRAVIS_TAG=${GIT[0]} ; git tag ${TRAVIS_TAG} ; else ; echo 'Deploying DEV build' && LABEL='dev' ; fi
 - git config --local user.name ${USERNAME}
 - git config --local user.email ${USERNAME}@gmail.com
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
