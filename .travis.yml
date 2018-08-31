@@ -68,7 +68,7 @@ before_install:
 - echo $TRAVIS_TAG
 - echo $TRAVIS_PYTHON_VERSION
 - echo $PYTHON_VER
-
+#- chmod -R +x ./devtools/travis-ci/
 #- chmod +x ./devtools/travis-ci/set_tags.sh
 #- sh ./devtools/travis-ci/set_tags.sh
 
