@@ -1,4 +1,5 @@
 #!/bin/bash
+
 export TRAVIS_BRANCH="${BRANCH}"
 IFS="- " read -r -a GIT <<< `git describe --tags`
 if [ ${RELEASE} = "true" ]; then

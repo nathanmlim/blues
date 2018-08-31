@@ -89,8 +89,8 @@ after_success:
 - echo $TRAVIS_BRANCH
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
-- chmod +x ./devtools/travis-ci/sphinx_make.sh
-- sh ./devtools/travis-ci/sphinx_make.sh
+#- chmod +x ./devtools/travis-ci/sphinx_make.sh
+#- sh ./devtools/travis-ci/sphinx_make.sh
 
 before_deploy:
 - git config --local user.name ${USERNAME}

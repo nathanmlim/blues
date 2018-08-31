@@ -1,6 +1,6 @@
 # start at /
 # e.g. run as docs/sphinx_make.sh
-pip install sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx
+pip install sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx pandoc
 
 cd docs
 make clean
