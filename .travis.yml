@@ -51,14 +51,14 @@ before_install:
 - conda config --add channels conda-forge
 # Parse Github Tag into BASH array
 - IFS="- " read -r -a GIT <<< `git describe --tags`
-- if ${RELEASE} ; then
-      echo 'Deploying RELEASE build'
-      LABEL='main'
-      TRAVIS_TAG=${GIT[0]}
-  else
-      echo 'Deploying DEV build'
-      LABEL='dev'
-  fi
+#- if ${RELEASE} ; then
+- echo 'Deploying RELEASE build'
+- LABEL='main'
+- TRAVIS_TAG=${GIT[0]}
+  #else
+#      echo 'Deploying DEV build'
+#      LABEL='dev'
+#  fi
 install:
 
 - conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov
