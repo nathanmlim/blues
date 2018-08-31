@@ -60,7 +60,13 @@ install:
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
 - conda install --use-local -q ${PKG_NAME}
 - conda list
+<<<<<<< HEAD
 
+=======
+# Parse Github Tag into BASH array
+- IFS="- " read -r -a GIT <<< `git describe --tags`
+- if ${RELEASE} ; then echo 'Deploying RELEASE build' && LABEL='main' && TRAVIS_TAG=${GIT[0]} ; git tag ${TRAVIS_TAG} ; else ; echo 'Deploying DEV build' && LABEL='dev' ; fi
+>>>>>>> 022a817d8b617ad38225492003f20124b93630fa
 script:
 - pytest -v -s --cov=blues blues/tests/
 after_success:
