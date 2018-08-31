@@ -33,7 +33,7 @@ source ~/.bashrc  # source file to get new commands
 #export PATH=$MINICONDA_HOME/bin:$PATH  # Old way, should not be needed anymore
 
 conda config --set always_yes yes
-conda install conda conda-build jinja2 anaconda-client
+conda install conda conda-build conda-verify jinja2 anaconda-client
 conda update --quiet --all
 
 # Restore original directory

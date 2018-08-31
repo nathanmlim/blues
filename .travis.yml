@@ -61,7 +61,6 @@ before_install:
 install:
 
 - conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov
-  conda-verify
 - conda activate ${CONDA_ENV}
 - pip install codecov
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
@@ -86,7 +85,7 @@ deploy:
   skip_cleanup: true
   script: "./devtools/conda-recipe/conda_upload.sh"
   on:
-    branch: $TRAVIS_TAG
+    branch: $TRAVIS_BRANCH
     #tags: true
 
 # Issue a github release from the master branch
@@ -95,7 +94,7 @@ deploy:
   file: $CONDA_BLD_FILE
   skip_cleanup: true
   on:
-    branch: $TRAVIS_TAG
+    branch: $TRAVIS_BRANCH
     #tags: true #Deploys when $TRAVIS_TAG is set
 
 # Display docs on Github Pages from master branch
@@ -104,7 +103,7 @@ deploy:
   github-token: $GITHUB_RELEASES  # Set in the settings page of your repository, as a secure variable
   keep-history: true
   local-dir: docs/_build/
-  target-branch: $TRAVIS_TAG
+  target-branch: $TRAVIS_BRANCH
   on:
-    branch: $TRAVIS_TAG
+    branch: $TRAVIS_BRANCH
     #tags: true
