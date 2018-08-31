@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Parse Github Tag into BASH array
-IFS="- " read -r -a GIT <<< `git describe --tags`
-
-# Check for release flag
-if ${RELEASE} ; then
-    echo 'Deploying RELEASE build' && LABEL='main'
-else
-    echo 'Deploying DEV build' && LABEL='dev'
-fi
+# # Parse Github Tag into BASH array
+# IFS="- " read -r -a GIT <<< `git describe --tags`
+#
+# # Check for release flag
+# if ${RELEASE} ; then
+#     echo 'Deploying RELEASE build' && LABEL='main'
+# else
+#     echo 'Deploying DEV build' && LABEL='dev'
+# fi
 
 # Export the conda environment
 CONDA_ENV_FILE=${PKG_NAME}-${GIT[0]}_py${CONDA_PY}-${TRAVIS_OS_NAME}.yml

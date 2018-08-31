@@ -63,28 +63,48 @@ after_success:
 - codecov
 - test $TRAVIS_BRANCH = "master" && chmod +x  ./devtools/conda-recipe/conda_upload.sh
 before_deploy:
+  # Parse Github Tag into BASH array
+  - IFS="- " read -r -a GIT <<< `git describe --tags`
+
+  - if ${RELEASE} ; then
+      echo 'Deploying RELEASE build'
+      LABEL='main' && TRAVIS_TAG=${GIT[0]}
+      git tag ${TRAVIS_TAG}
+    else
+      echo 'Deploying DEV build'
+      LABEL='dev'
+    fi
 - git config --local user.name ${USERNAME}
 - git config --local user.email ${USERNAME}@gmail.com
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
+
 deploy:
-# - provider: script
-#   skip_cleanup: true
-#   script: "./devtools/conda-recipe/conda_upload.sh"
-#   on:
-#     branch: master
+
+# Upload the built anaconda package to Anaconda.org
+- provider: script
+  skip_cleanup: true
+  script: "./devtools/conda-recipe/conda_upload.sh"
+  on:
+    #branch: master
+    tags: true
+
+# Issue a github release from the master branch
 - provider: releases
   api_key: $GITHUB_RELEASES
   file: $CONDA_BLD_FILE
   skip_cleanup: true
   on:
-    branch: ci-deploy
-    #tags: true
+    #branch: master
+    tags: true #Deploys when $TRAVIS_TAG is set
+
+# Display docs on Github Pages from master branch
 - provider: pages
   skip-cleanup: true
   github-token: $GITHUB_RELEASES  # Set in the settings page of your repository, as a secure variable
   keep-history: true
   local-dir: docs/_build/
-  target-branch: ci-deploy
+  target-branch: master
   on:
-    branch: ci-deploy
+    tags: true
+    #branch: master
