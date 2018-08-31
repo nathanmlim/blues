@@ -1,21 +1,20 @@
 dist: trusty
 sudo: false
 language: python
-branches:
-  only:
-  - ci-deploy
+
 env:
   global:
   - ORGNAME="omnia"
   - USERNAME="nathanmlim"
   - PKG_NAME="blues"
   - RELEASE=true
+  - BRANCH='ci-deploy"
   - CONDA_ENV="${PKG_NAME}-${TRAVIS_OS_NAME}"
   - OE_LICENSE="$HOME/oe_license.txt"
   - OPENEYE_CHANNEL="-i https://pypi.anaconda.org/openeye/channel/main/simple"
   - OPENEYE_BETA="https://pypi.anaconda.org/openeye/label/beta/simple"
   matrix:
-    secure: sUnZFjMgrhNYx50NIYoYw+TDJN9TD6gcWHfs/IVxf3NT3tWR+EQ3tFeMlIIlEoY8eRzTCV7rwkYaJNBD4lpdjUeFCBWbkBp0OlgmD7uLVJ+ZjTk+pYeeI9jrJGhxKRH9JYZxvb4XbelP1mJ1Vo936T0i1yUslOSzoakrBfdricZkg5tw8sLEhSFIhdsorsrDWKTquOOIUvwev2a19tOs9o+bgTEdaekiwA3dzZX2386R79DkD4GmCJZidG2AE9+wOReC2Kfr8aZySBaX+oTv19gMNFMHaWlEVaGaNPZOVSawgBml0WhRwc1KrrnEUie2+RcDY/+3IaA6NwF2j8YkSCsMPKT0FftiI+ekCQTXOrQpL97oCavG/pDNSWcKc4Lw4WYfnesdJZxx0p7p3KgdEyAyW20USVjCePBnYc+/0/UhDMrgcoiOCB3JgHn1mvlptV9uX6Adl+lucsRaHP2Kk7vLtO+R/WS65YggGwrwshIrHdgIHgvxzkrkxcQnkXFtZuA6pcEIWbWlf8EK7yEaK3JAH3qFzYTtfK/MuMtsxKaOU+Gm/Hh2yMLtbhHnkd1SkV7Cq0ycbiGXEb+FbNrc056qDLAzFNzzH4hm4gY0s2izicF8pRcTOHP5F/UVKsq8RBlXnBalqONGVZx+42NRVK87mZy939MUAtTB/vBk+FQ=
+    secure: "oxxCyFfhIGIJj9QieZHnJ5D1KX0zfm15tn3jCDPdMcimDvuL42qf0dBNHDu3dTSZorG6U0Mz+5+ESoVsdz6q+96m0oDY4t/tKftC4IGddKFBJDVVDxnoB2ebPIGttAIAjl6VWLrNNJotnFPkQOX89NgbDFQtcteOnRq4EZ4kgDjhADkikVi9kqBJxrN60QYRyWt4G5qHyxOtEetK385v9O5yBjqN3N0im/mV23zv6q5LjaMcRJlScGlXWomwkU4+rifQ6PoAhtHnVQqRili2RAaeWMUsDTRP3oe9/mX2niUeIAG9JdmUg1TNkdj00oA8JunZaqAEHP0Q7h1XlPyX6UUExUn9lKi1DhN563z4PsmWvLI5Nx4OssLvTIpBowjs6FDVN+QX0/bGpbfVr8+yaD0dpvMO7d/52XHsHLLSWFqRT77YEudPHh4VLr9D+9910TKQdXbOfZYhrAVTYLeJBbktguNNakxwx/tblcswsWtzcZyKhSKYxyk9wWDNqOQfB/KY1l5OO6hgK6cZJQVlZEet7rXFzq2JeQq1zQLcdPEwWcbyUbt4m35ASQDfx0Dm/Rw4ASD6la6sh7G+SBMuIvcYwVJy5hK+Nifo9qZtNTCT5WZwHhQzal54xf2SgGRXt0lsMB6N7IiDxotax3OyM/EBeMiHJX2duS7EL5wax4k="
 matrix:
   include:
     # Extra includes for OSX since python language is not available by default on OSX
@@ -38,6 +37,10 @@ matrix:
     #   env:
     #       - CONDA_PY="36"
     #       - PYTHON_VER="3.6"
+
+branches:
+  only:
+  - $BRANCH
 before_install:
 - uname -a
 - source devtools/travis-ci/before_install.sh
@@ -71,11 +74,13 @@ install:
 
 script:
 - pytest -v -s --cov=blues blues/tests/
+
 after_success:
 - codecov
-- test $TRAVIS_BRANCH = "ci-deploy" && chmod +x ./devtools/conda-recipe/conda_upload.sh
+- test $TRAVIS_BRANCH = $BRANCH && chmod +x ./devtools/conda-recipe/conda_upload.sh
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
+#- chmod +x ./devtools/travis-ci/sphinx_make.sh
 
 before_deploy:
 - git config --local user.name ${USERNAME}
