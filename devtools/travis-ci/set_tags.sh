@@ -2,8 +2,10 @@
 export TRAVIS_BRANCH="${BRANCH}"
 if [ ${RELEASE} = "true" ]; then
     echo "Deploying RELEASE build" ;
+    git fetch --tags --all
+    git tag -d ${TAG}
     git push origin :refs/tags/${TAG} ;
-    git tag -fa ${TAG} ;
+    git tag -f ${TAG} ;
     git push origin ${BRANCH} --tags ;
     export LABEL="main" ;
     export TRAVIS_TAG=${GIT[0]} ;
