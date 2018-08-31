@@ -55,7 +55,6 @@ before_install:
 - echo 'Deploying RELEASE build'
 - LABEL='main'
 - TRAVIS_TAG=${GIT[0]}
-- git tag ${TRAVIS_TAG}
   #else
 #      echo 'Deploying DEV build'
 #      LABEL='dev'
