@@ -50,11 +50,11 @@ before_install:
 - conda config --add channels omnia
 - conda config --add channels conda-forge
 install:
-- conda create -n ${CONDA_ENV} python=${TRAVIS_PYTHON_VERSION} pip pytest pytest-cov
+- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov
   conda-verify
 - conda activate ${CONDA_ENV}
 - pip install codecov
-- conda build -q --python=${TRAVIS_PYTHON_VERSION} devtools/conda-recipe
+- conda build -q --python=${PYTHON_VER} devtools/conda-recipe
 - conda install --use-local -q ${PKG_NAME}
 - conda list
 script:
@@ -65,7 +65,7 @@ after_success:
 before_deploy:
 - git config --local user.name ${USERNAME}
 - git config --local user.email ${USERNAME}@gmail.com
-- export CONDA_BLD_FILE=`conda build --python=${TRAVIS_PYTHON_VERSION} devtools/conda-recipe
+- export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
 deploy:
 # - provider: script
