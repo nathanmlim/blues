@@ -52,11 +52,12 @@ before_install:
 # Parse Github Tag into BASH array
 - IFS="- " read -r -a GIT <<< `git describe --tags`
 - if ${RELEASE} ; then
-    echo 'Deploying RELEASE build';
-    LABEL='main' && TRAVIS_TAG=${GIT[0]};
-    git tag ${TRAVIS_TAG};
+    echo 'Deploying RELEASE build'
+    LABEL='main'
+    TRAVIS_TAG=${GIT[0]}
   else
-    echo 'Deploying DEV build' && LABEL='dev'
+    echo 'Deploying DEV build'
+    LABEL='dev'
   fi
 install:
 
