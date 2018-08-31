@@ -87,8 +87,8 @@ deploy:
   skip_cleanup: true
   script: "./devtools/conda-recipe/conda_upload.sh"
   on:
-    #branch: master
-    tags: true
+    branch: ci-deploy
+    #tags: true
 
 # Issue a github release from the master branch
 - provider: releases
@@ -96,8 +96,8 @@ deploy:
   file: $CONDA_BLD_FILE
   skip_cleanup: true
   on:
-    #branch: master
-    tags: true #Deploys when $TRAVIS_TAG is set
+    branch: ci-deploy
+    #tags: true #Deploys when $TRAVIS_TAG is set
 
 # Display docs on Github Pages from master branch
 - provider: pages
@@ -107,5 +107,5 @@ deploy:
   local-dir: docs/_build/
   target-branch: master
   on:
-    #branch: master
-    tags: true
+    branch: ci-deploy
+    #tags: true
