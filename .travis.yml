@@ -18,18 +18,28 @@ env:
     secure: sUnZFjMgrhNYx50NIYoYw+TDJN9TD6gcWHfs/IVxf3NT3tWR+EQ3tFeMlIIlEoY8eRzTCV7rwkYaJNBD4lpdjUeFCBWbkBp0OlgmD7uLVJ+ZjTk+pYeeI9jrJGhxKRH9JYZxvb4XbelP1mJ1Vo936T0i1yUslOSzoakrBfdricZkg5tw8sLEhSFIhdsorsrDWKTquOOIUvwev2a19tOs9o+bgTEdaekiwA3dzZX2386R79DkD4GmCJZidG2AE9+wOReC2Kfr8aZySBaX+oTv19gMNFMHaWlEVaGaNPZOVSawgBml0WhRwc1KrrnEUie2+RcDY/+3IaA6NwF2j8YkSCsMPKT0FftiI+ekCQTXOrQpL97oCavG/pDNSWcKc4Lw4WYfnesdJZxx0p7p3KgdEyAyW20USVjCePBnYc+/0/UhDMrgcoiOCB3JgHn1mvlptV9uX6Adl+lucsRaHP2Kk7vLtO+R/WS65YggGwrwshIrHdgIHgvxzkrkxcQnkXFtZuA6pcEIWbWlf8EK7yEaK3JAH3qFzYTtfK/MuMtsxKaOU+Gm/Hh2yMLtbhHnkd1SkV7Cq0ycbiGXEb+FbNrc056qDLAzFNzzH4hm4gY0s2izicF8pRcTOHP5F/UVKsq8RBlXnBalqONGVZx+42NRVK87mZy939MUAtTB/vBk+FQ=
 matrix:
   include:
-  # - os: osx
-  #   language: generic
-  #   env: CONDA_PY=35
-  # - os: osx
-  #   language: generic
-  #   env: CONDA_PY=36
-  - os: linux
-    python: 3.5
-    env: CONDA_PY=35
-  # - os: linux
-  #   python: 3.6
-  #   env: CONDA_PY=36
+    # Extra includes for OSX since python language is not available by default on OSX
+    # - os: osx
+    #   language: generic
+    #   env:
+    #       - CONDA_PY="35"
+    #       - PYTHON_VER="3.5"
+    # - os: osx
+    #   language: generic
+    #   env:
+    #       - CONDA_PY="36"
+    #       - PYTHON_VER="3.6"
+
+    - os: linux
+      python: 3.5
+      env:
+          - CONDA_PY="35"
+          - PYTHON_VER="3.5"
+    # - os: linux
+    #   python: 3.6
+    #   env:
+    #       - CONDA_PY="36"
+    #       - PYTHON_VER="3.6"
 before_install:
 - uname -a
 - source devtools/travis-ci/before_install.sh
@@ -74,5 +84,7 @@ deploy:
   skip-cleanup: true
   github-token: $GITHUB_RELEASES  # Set in the settings page of your repository, as a secure variable
   keep-history: true
+  local-dir: docs/_build/
+  target-branch: ci-deploy
   on:
     branch: ci-deploy
