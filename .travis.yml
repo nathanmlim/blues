@@ -14,6 +14,7 @@ env:
   - OE_LICENSE="$HOME/oe_license.txt"
   - OPENEYE_CHANNEL="-i https://pypi.anaconda.org/openeye/channel/main/simple"
   - OPENEYE_BETA="https://pypi.anaconda.org/openeye/label/beta/simple"
+
   matrix:
     secure: oxxCyFfhIGIJj9QieZHnJ5D1KX0zfm15tn3jCDPdMcimDvuL42qf0dBNHDu3dTSZorG6U0Mz+5+ESoVsdz6q+96m0oDY4t/tKftC4IGddKFBJDVVDxnoB2ebPIGttAIAjl6VWLrNNJotnFPkQOX89NgbDFQtcteOnRq4EZ4kgDjhADkikVi9kqBJxrN60QYRyWt4G5qHyxOtEetK385v9O5yBjqN3N0im/mV23zv6q5LjaMcRJlScGlXWomwkU4+rifQ6PoAhtHnVQqRili2RAaeWMUsDTRP3oe9/mX2niUeIAG9JdmUg1TNkdj00oA8JunZaqAEHP0Q7h1XlPyX6UUExUn9lKi1DhN563z4PsmWvLI5Nx4OssLvTIpBowjs6FDVN+QX0/bGpbfVr8+yaD0dpvMO7d/52XHsHLLSWFqRT77YEudPHh4VLr9D+9910TKQdXbOfZYhrAVTYLeJBbktguNNakxwx/tblcswsWtzcZyKhSKYxyk9wWDNqOQfB/KY1l5OO6hgK6cZJQVlZEet7rXFzq2JeQq1zQLcdPEwWcbyUbt4m35ASQDfx0Dm/Rw4ASD6la6sh7G+SBMuIvcYwVJy5hK+Nifo9qZtNTCT5WZwHhQzal54xf2SgGRXt0lsMB6N7IiDxotax3OyM/EBeMiHJX2duS7EL5wax4k=
 matrix:
@@ -41,7 +42,7 @@ matrix:
 
 branches:
   only:
-  - ci-deploy
+    - ci-deploy
 
 before_install:
 - uname -a
@@ -54,16 +55,16 @@ before_install:
 - conda config --add channels conda-forge
 - export TRAVIS_BRANCH="${BRANCH}"
 - 'if [ ${RELEASE} = "true" ]; then
-      echo 'Deploying RELEASE build';
-      git push origin :refs/tags/${TAG};
-      git tag -fa ${TAG};
-      git push origin ${BRANCH} --tags;
-      export LABEL='main';
-      export TRAVIS_TAG=${GIT[0]};
+      echo "Deploying RELEASE build" ;
+      git push origin :refs/tags/${TAG} ;
+      git tag -fa ${TAG} ;
+      git push origin ${BRANCH} --tags ;
+      export LABEL="main" ;
+      export TRAVIS_TAG=${GIT[0]} ;
   else
-      echo 'Deploying DEV build';
-      export LABEL='dev';
-      export TRAVIS_TAG=`git describe --tags`;
+      echo "Deploying DEV build";
+      export LABEL="dev";
+      export TRAVIS_TAG= $( git describe --tags` ) ;
   fi'
 - echo $TRAVIS_BRANCH
 - echo $TRAVIS_TAG
@@ -71,10 +72,9 @@ before_install:
 - echo $PYTHON_VER
 
 install:
-
 - conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov
 - conda activate ${CONDA_ENV}
-- pip install codecov sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx
+- pip install codecov
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
 - conda install --use-local -q ${PKG_NAME}
 - conda list
