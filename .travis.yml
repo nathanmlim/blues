@@ -52,8 +52,10 @@ before_install:
 #- if ${RELEASE} ; then
 - echo 'Deploying RELEASE build'
 - LABEL='main'
-- TRAVIS_TAG=${GIT[0]}
+- export TRAVIS_TAG=${GIT[0]}
 - echo $TRAVIS_TAG
+- echo $TRAVIS_PYTHON_VERSION
+- echo $PYTHON_VER
   #else
 #      echo 'Deploying DEV build'
 #      LABEL='dev'
@@ -72,11 +74,12 @@ script:
 after_success:
 - codecov
 - test $TRAVIS_BRANCH = "ci-deploy" && chmod +x ./devtools/conda-recipe/conda_upload.sh
+- export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
+  --output`
+
 before_deploy:
 - git config --local user.name ${USERNAME}
 - git config --local user.email ${USERNAME}@gmail.com
-- export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
-  --output`
 
 deploy:
 
@@ -103,7 +106,7 @@ deploy:
   github-token: $GITHUB_RELEASES  # Set in the settings page of your repository, as a secure variable
   keep-history: true
   local-dir: docs/_build/
-  target-branch: $TRAVIS_BRANCH
+  target-branch: gh-pages
   on:
     branch: $TRAVIS_BRANCH
     #tags: true
