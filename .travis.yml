@@ -50,6 +50,9 @@ before_install:
 - conda config --add channels omnia
 - conda config --add channels conda-forge
 install:
+# Parse Github Tag into BASH array
+- IFS="- " read -r -a GIT <<< `git describe --tags`
+- if ${RELEASE} ; then echo 'Deploying RELEASE build' && LABEL='main' && TRAVIS_TAG=${GIT[0]} ; git tag ${TRAVIS_TAG} ; else ; echo 'Deploying DEV build' && LABEL='dev' ; fi
 - conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov
   conda-verify
 - conda activate ${CONDA_ENV}
@@ -57,16 +60,13 @@ install:
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
 - conda install --use-local -q ${PKG_NAME}
 - conda list
+
 script:
 - pytest -v -s --cov=blues blues/tests/
 after_success:
 - codecov
 - test $TRAVIS_BRANCH = "master" && chmod +x  ./devtools/conda-recipe/conda_upload.sh
 before_deploy:
-# Parse Github Tag into BASH array
-- IFS="- " read -r -a GIT <<< `git describe --tags`
-
-- if ${RELEASE} ; then echo 'Deploying RELEASE build' && LABEL='main' && TRAVIS_TAG=${GIT[0]} ; git tag ${TRAVIS_TAG} ; else ; echo 'Deploying DEV build' && LABEL='dev' ; fi
 - git config --local user.name ${USERNAME}
 - git config --local user.email ${USERNAME}@gmail.com
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
