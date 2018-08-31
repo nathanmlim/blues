@@ -107,5 +107,5 @@ deploy:
   local-dir: docs/_build/
   target-branch: master
   on:
-    tags: true
     #branch: master
+    tags: true
