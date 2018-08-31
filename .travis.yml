@@ -53,8 +53,24 @@ before_install:
 - conda config --set anaconda_upload no
 - conda config --add channels omnia
 - conda config --add channels conda-forge
-- chmod +x ./devtools/travis-ci/set_tags.sh
-- sh ./devtools/travis-ci/set_tags.sh
+- export TRAVIS_BRANCH="${BRANCH}"
+- IFS="- " read -r -a GIT <<< `git describe --tags`
+- 'if [ ${RELEASE} = "true" ]; then
+      echo "Deploying RELEASE build" ;
+      export LABEL="main" ;
+      export TRAVIS_TAG=${GIT[0]} ;
+  else
+      echo "Deploying DEV build";
+      export LABEL="dev";
+      export TRAVIS_TAG=`git describe --tags` ;
+  fi'
+- echo $TRAVIS_BRANCH
+- echo $TRAVIS_TAG
+- echo $TRAVIS_PYTHON_VERSION
+- echo $PYTHON_VER
+
+#- chmod +x ./devtools/travis-ci/set_tags.sh
+#- sh ./devtools/travis-ci/set_tags.sh
 
 install:
 - conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov

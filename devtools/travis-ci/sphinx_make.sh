@@ -20,12 +20,12 @@ cd ..
 #cd ../../../../
 
 # switch to gh-pages
-git checkout gh-pages
-git pull
-cp -r docs/_build/html/* ./
-git add -A
-git commit -m "$(date)"
-git push origin gh-pages
+# git checkout gh-pages
+# git pull
+# cp -r docs/_build/html/* ./
+# git add -A
+# git commit -m "$(date)"
+# git push origin gh-pages
 
 # switch to master
 git checkout $TRAVIS_BRANCH
