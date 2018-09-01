@@ -74,7 +74,7 @@ before_install:
 #- sh ./devtools/travis-ci/set_tags.sh
 
 install:
-- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov ipython
+- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov ipython 
 - conda activate ${CONDA_ENV}
 - pip install codecov
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
@@ -93,10 +93,10 @@ after_success:
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
 
-
-before_deploy:
-- git config --local user.name ${USERNAME}
-- git config --local user.email ${USERNAME}@gmail.com
+#
+# before_deploy:
+# - git config --local user.name ${USERNAME}
+# - git config --local user.email ${USERNAME}@gmail.com
 
 deploy:
 
