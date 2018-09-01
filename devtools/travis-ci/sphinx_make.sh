@@ -1,6 +1,6 @@
 # start at /
 # e.g. run as docs/sphinx_make.sh
-pip install sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx pandoc
+pip install sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx
 
 cd docs
 make clean
@@ -20,12 +20,12 @@ cd ..
 #cd ../../../../
 
 # switch to gh-pages
-git checkout gh-pages
-git pull
-cp -r docs/_build/html/* ./
-git add -A
-git commit -m "$(date)"
-git push origin gh-pages
-
-# switch to master
-git checkout $TRAVIS_BRANCH
+# git checkout gh-pages
+# git pull
+# cp -r docs/_build/html/* ./
+# git add -A
+# git commit -m "$(date)"
+# git push origin gh-pages
+#
+# # switch to master
+# git checkout $TRAVIS_BRANCH

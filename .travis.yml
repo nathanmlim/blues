@@ -55,6 +55,7 @@ before_install:
 - conda config --add channels conda-forge
 - export TRAVIS_BRANCH="${BRANCH}"
 - IFS="- " read -r -a GIT <<< `git describe --tags`
+- export CONDA_ENV_FILE=${PKG_NAME}-${GIT[0]}_py${CONDA_PY}-${TRAVIS_OS_NAME}.yml
 - 'if [ ${RELEASE} = "true" ]; then
       echo "Deploying RELEASE build" ;
       export LABEL="main" ;
@@ -68,12 +69,12 @@ before_install:
 - echo $TRAVIS_TAG
 - echo $TRAVIS_PYTHON_VERSION
 - echo $PYTHON_VER
-#- chmod -R +x ./devtools/travis-ci/
+- chmod -R +x ./devtools/travis-ci/
 #- chmod +x ./devtools/travis-ci/set_tags.sh
 #- sh ./devtools/travis-ci/set_tags.sh
 
 install:
-- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov
+- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov ipython
 - conda activate ${CONDA_ENV}
 - pip install codecov
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
@@ -82,6 +83,8 @@ install:
 
 script:
 - pytest -v -s --cov=blues blues/tests/
+- chmod +x ./devtools/travis-ci/sphinx_make.sh
+- sh ./devtools/travis-ci/sphinx_make.sh
 
 after_success:
 - codecov
@@ -89,8 +92,7 @@ after_success:
 - echo $TRAVIS_BRANCH
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
-#- chmod +x ./devtools/travis-ci/sphinx_make.sh
-#- sh ./devtools/travis-ci/sphinx_make.sh
+
 
 before_deploy:
 - git config --local user.name ${USERNAME}
