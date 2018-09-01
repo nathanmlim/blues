@@ -74,17 +74,17 @@ before_install:
 #- sh ./devtools/travis-ci/set_tags.sh
 
 install:
-- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov ipython
+- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov pandoc
 - conda activate ${CONDA_ENV}
-- pip install codecov
+- pip install codecov sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
 - conda install --use-local -q ${PKG_NAME}
 - conda list
 
 script:
 - pytest -v -s --cov=blues blues/tests/
-- chmod +x ./devtools/travis-ci/sphinx_make.sh
-- sh ./devtools/travis-ci/sphinx_make.sh
+#- chmod +x ./devtools/travis-ci/sphinx_make.sh
+#- sh ./devtools/travis-ci/sphinx_make.sh
 
 after_success:
 - codecov
@@ -93,10 +93,10 @@ after_success:
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
 
-
-before_deploy:
-- git config --local user.name ${USERNAME}
-- git config --local user.email ${USERNAME}@gmail.com
+#
+# before_deploy:
+# - git config --local user.name ${USERNAME}
+# - git config --local user.email ${USERNAME}@gmail.com
 
 deploy:
 

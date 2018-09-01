@@ -1,5 +1,8 @@
 #!/bin/bash
 
+git config --local user.name ${USERNAME}
+git config --local user.email ${USERNAME}@gmail.com
+
 export TRAVIS_BRANCH="${BRANCH}"
 IFS="- " read -r -a GIT <<< `git describe --tags`
 if [ ${RELEASE} = "true" ]; then
