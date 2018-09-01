@@ -74,7 +74,7 @@ before_install:
 #- sh ./devtools/travis-ci/set_tags.sh
 
 install:
-- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov pandoc
+- conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov ipython
 - conda activate ${CONDA_ENV}
 - pip install codecov sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
