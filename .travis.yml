@@ -95,9 +95,9 @@ after_success:
   --output`
 
 #
-# before_deploy:
-# - git config --local user.name ${USERNAME}
-# - git config --local user.email ${USERNAME}@gmail.com
+before_deploy:
+- git config --local user.name ${USERNAME}
+- git config --local user.email ${USERNAME}@gmail.com
 
 deploy:
 
