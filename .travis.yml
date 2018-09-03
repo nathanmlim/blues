@@ -7,7 +7,6 @@ env:
   - ORGNAME="omnia"
   - USERNAME="nathanmlim"
   - PKG_NAME="blues"
-  - TAG="0.2.4"
   - RELEASE=true
   - BRANCH="ci-deploy"
   - CONDA_ENV="${PKG_NAME}-${TRAVIS_OS_NAME}"
@@ -76,20 +75,22 @@ before_install:
 install:
 - conda create -n ${CONDA_ENV} python=${PYTHON_VER} pip pytest pytest-cov ipython
 - conda activate ${CONDA_ENV}
-- pip install codecov sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx
+- pip install codecov docutils jinja2 sphinx sphinxcontrib-napoleon sphinx_rtd_theme numpydoc nbsphinx travis-sphinx
 - conda build -q --python=${PYTHON_VER} devtools/conda-recipe
 - conda install --use-local -q ${PKG_NAME}
 - conda list
 
 script:
 - pytest -v -s --cov=blues blues/tests/
+#- travis-sphinx build --source=docs/_build/html --branches=$TRAVIS_BRANCH
 #- chmod +x ./devtools/travis-ci/sphinx_make.sh
 #- sh ./devtools/travis-ci/sphinx_make.sh
 
 after_success:
-- codecov
+- codecov 
 - chmod +x ./devtools/conda-recipe/conda_upload.sh
 - echo $TRAVIS_BRANCH
+#- travis-sphinx deploy
 - export CONDA_BLD_FILE=`conda build --python=${PYTHON_VER} devtools/conda-recipe
   --output`
 
@@ -122,7 +123,7 @@ deploy:
   skip-cleanup: true
   github-token: $GITHUB_RELEASES  # Set in the settings page of your repository, as a secure variable
   keep-history: true
-  local-dir: docs/_build/html/
+  local-dir: docs/build/html/
   target-branch: gh-pages
   on:
     branch: $TRAVIS_BRANCH
