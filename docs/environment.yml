@@ -22,3 +22,4 @@ dependencies:
   - ipython
   - pip:
     - nbsphinx
+    - git+git://github.com/RobinPetit/sphinx-pyreverse.git@compatibility_sphinx_1.7
