@@ -206,7 +206,7 @@ class MetropolizedNCMCMove(MetropolizedMove):
                     lambda_electrostatics = context.getParameter('lambda_electrostatics')
                     logp_accept = context._integrator.getLogAcceptanceProbability(context)
 
-                    #thermodynamic_state.set_alchemical_variable('lambda', alch_lambda)
+                    thermodynamic_state.set_alchemical_variable('lambda', alch_lambda)
                     thermodynamic_state.set_function_variable('lambda', alch_lambda)
                     thermodynamic_state.lambda_sterics = lambda_sterics
                     thermodynamic_state.lambda_electrostatics = lambda_electrostatics
@@ -224,14 +224,11 @@ class MetropolizedNCMCMove(MetropolizedMove):
                         sampler_state.apply_to_context(context, ignore_velocities=True)
                         #print('Sampler_positions', sampler_state.positions[atom_subset])
 
-                    # Get the context state for reporting
-                    context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                                             enforcePeriodicBox=thermodynamic_state.is_periodic)
-
                     if n % reporter._reportInterval == 0:
+                        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True, enforcePeriodicBox=thermodynamic_state.is_periodic)
                         print('N', n, 'Step:', step, 'PE:', context_state.getPotentialEnergy(), 'Work:', protocol_work,
                               '\n', 'Lambda: ', alch_lambda, 'Sterics:', lambda_sterics, 'Elec:', lambda_electrostatics,"\n Log Acceptance P:", logp_accept )
-                        reporter.report(self.simulation, context_state)
+                        reporter.report(context_state, integrator)
 
             except Exception as e:
                 print(e)
@@ -433,10 +430,9 @@ class ModLangevinDynamicsMove(LangevinDynamicsMove):
                     integrator.step(1)
 
                     if n % reporter._reportInterval == 0:
-                        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                                     enforcePeriodicBox=thermodynamic_state.is_periodic)
+                        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,enforcePeriodicBox=thermodynamic_state.is_periodic)
                         print('Reporting MD step:', n)
-                        reporter.report(self.simulation, context_state)
+                        reporter.report(context_state, integrator)
 
             except Exception as e:
                 print(e)

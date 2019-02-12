@@ -1261,7 +1261,7 @@ class NCMCSampler(object):
 
 
     def __init__(self, atom_subset=None, thermodynamic_state=None, alch_thermodynamic_state=None,
-                 sampler_state=None, move=None, platform=None, reporter=None, topology=None):
+                 sampler_state=None, move=None, platform=None, reporter=None, storage=None, topology=None):
         """
         Create an MCMC sampler.
         Parameters
@@ -1305,6 +1305,7 @@ class NCMCSampler(object):
         self.platform = platform
 
         # For writing trajectory files
+        self.storage = storage
         self.reporter = reporter
         self._timing = dict()
 
@@ -1419,7 +1420,7 @@ class NCMCSampler(object):
 
         for iteration in range(n_iterations):
             self.update()
-            
+
         print('n_accepted', self.n_accepted)
         print('n_proposed', self.n_proposed)
 

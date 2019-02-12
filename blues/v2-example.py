@@ -1,6 +1,7 @@
 from simtk import unit, openmm
 from openmmtools import cache, alchemy
 from openmmtools.states import SamplerState, ThermodynamicState, CompoundThermodynamicState
+from openmmtools import storage
 
 from blues import utils
 import parmed
@@ -8,8 +9,8 @@ import logging
 import os, sys, copy
 import numpy as np
 from blues.moves import RandomLigandRotationMove, ModLangevinDynamicsMove
-from blues.simulation import NCMCSampler
-from blues.reporters import NetCDF4Reporter
+from blues.simulation import NCMCSampler, SystemFactory
+from blues.reporters import NetCDF4Reporter, NetCDF4Storage
 
 finfo = np.finfo(np.float32)
 rtol = finfo.precision
@@ -44,22 +45,11 @@ sampler_state = SamplerState(positions=tol.positions)
 thermodynamic_state = ThermodynamicState(system=tol.system, temperature=temperature)
 
 # Create our AlchemicalState
-factory = alchemy.AbsoluteAlchemicalFactory(consistent_exceptions=False,
-                                            disable_alchemical_dispersion_correction=True,
-                                           alchemical_pme_treatment='direct-space')
-alchemical_atom_idx = utils.atomIndexfromTop('LIG',tol.topology)
-alchemical_region = alchemy.AlchemicalRegion(alchemical_atoms=alchemical_atom_idx,
-                                             annihilate_sterics=False,
-                                             annihilate_electrostatics=True)
-alchemical_atoms = list(alchemical_region.alchemical_atoms)
-#atom_subset = slice(alchemical_atoms[0], alchemical_atoms[-1]+1)
-toluene_alchemical_system = factory.create_alchemical_system(
-    reference_system=tol.system, alchemical_regions=alchemical_region)
-
+alchemical_atoms = utils.atomIndexfromTop('LIG',tol.topology)
+toluene_alchemical_system = SystemFactory.generateAlchSystem(tol.system, alchemical_atoms)
 alchemical_state = alchemy.AlchemicalState.from_system(toluene_alchemical_system)
 alch_thermodynamic_state = ThermodynamicState(system=toluene_alchemical_system, temperature=temperature)
 alch_thermodynamic_state = CompoundThermodynamicState(alch_thermodynamic_state, composable_states=[alchemical_state])
-alch_thermodynamic_state.alchemical_atoms = alchemical_atoms
 alch_thermodynamic_state.topology = tol.topology
 
 # Iniitialize our Move set
@@ -76,9 +66,13 @@ if os.path.exists(filename):
     os.remove(filename)
 else:
     print("Sorry, I can not remove %s file." % filename)
-nc_reporter = NetCDF4Reporter(filename, reportInterval)
+#nc_reporter = NetCDF4Reporter(filename, reportInterval)
+nc_reporter = NetCDF4Storage(filename, reportInterval)
 
 sampler = NCMCSampler(alchemical_atoms, thermodynamic_state, alch_thermodynamic_state,
-                 sampler_state, move=[langevin_move, ncmc_move], platform=None, reporter=nc_reporter, topology=tol.topology)
+                 sampler_state, move=[langevin_move, ncmc_move], platform=None,
+                 reporter=nc_reporter, topology=tol.topology)
+
+
 sampler.equil()
 sampler.run(nIter)

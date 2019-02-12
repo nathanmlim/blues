@@ -863,3 +863,69 @@ class NetCDF4Reporter(parmed.openmm.reporters.NetCDFReporter):
             self._out.add_alchemicalLambda(alchemicalLambda)
         # Now it's time to add the time.
         self._out.add_time(state.getTime().value_in_unit(u.picosecond))
+
+class NetCDF4Storage(NetCDF4Reporter):
+
+    def report(self, context_state, integrator):
+        """Generate a report.
+
+        Parameters
+        ----------
+        simulation : :class:`app.Simulation`
+            The Simulation to generate a report for
+        state : :class:`mm.State`
+            The current state of the simulation
+
+        """
+        global VELUNIT, FRCUNIT
+
+        if self.crds:
+            crds = context_state.getPositions().value_in_unit(u.angstrom)
+        if self.vels:
+            vels = context_state.getVelocities().value_in_unit(VELUNIT)
+        if self.frcs:
+            frcs = context_state.getForces().value_in_unit(FRCUNIT)
+        if self.protocolWork:
+            protocolWork = integrator.get_protocol_work(dimensionless=True)
+        if self.alchemicalLambda:
+            alchemicalLambda = integrator.getGlobalVariableByName('lambda')
+        if self._out is None:
+            # This must be the first frame, so set up the trajectory now
+            if self.crds:
+                atom = len(crds)
+            elif self.vels:
+                atom = len(vels)
+            elif self.frcs:
+                atom = len(frcs)
+            self.uses_pbc = context_state.getPeriodicBoxVectors() is not None
+            self._out = NetCDF4Traj.open_new(
+                self.fname,
+                atom,
+                self.uses_pbc,
+                self.crds,
+                self.vels,
+                self.frcs,
+                title="ParmEd-created trajectory using OpenMM",
+                protocolWork=self.protocolWork,
+                alchemicalLambda=self.alchemicalLambda,
+            )
+
+        if self.uses_pbc:
+            vecs = context_state.getPeriodicBoxVectors()
+            lengths, angles = box_vectors_to_lengths_and_angles(*vecs)
+            self._out.add_cell_lengths_angles(lengths.value_in_unit(u.angstrom), angles.value_in_unit(u.degree))
+
+        # Add the coordinates, velocities, and/or forces as needed
+        if self.crds:
+            self._out.add_coordinates(crds)
+        if self.vels:
+            # The velocities get scaled right before writing
+            self._out.add_velocities(vels)
+        if self.frcs:
+            self._out.add_forces(frcs)
+        if self.protocolWork:
+            self._out.add_protocolWork(protocolWork)
+        if self.alchemicalLambda:
+            self._out.add_alchemicalLambda(alchemicalLambda)
+        # Now it's time to add the time.
+        self._out.add_time(context_state.getTime().value_in_unit(u.picosecond))
