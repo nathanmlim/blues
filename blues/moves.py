@@ -28,6 +28,7 @@ from openmmtools.utils import Timer
 from blues import utils
 from blues.integrators import AlchemicalExternalLangevinIntegrator
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 try:
     import openeye.oechem as oechem
@@ -40,11 +41,154 @@ try:
 except ImportError:
     print('ImportError: Could not import openeye-toolkits. SideChainMove class will be unavailable.')
 
-class DummySimulation(object):
-    def __init__(self, integrator, system, topology):
-        self.integrator = integrator
-        self.topology = topology
-        self.system = system
+class ModLangevinDynamicsMove(LangevinDynamicsMove):
+
+    def _before_integration(self, context, integrator, thermodynamic_state):
+        """Execute code after Context creation and before integration."""
+        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
+                             enforcePeriodicBox=thermodynamic_state.is_periodic)
+
+        self.initial_context_state = copy.deepcopy(context_state)
+        self.initial_energy = thermodynamic_state.reduced_potential(context)
+        self.initial_positions = context_state.getPositions()
+        #print("MD_PE_i", self.initial_energy)
+        #print("MD_i", self.initial_positions)
+
+    def _after_integration(self, context, thermodynamic_state):
+        """Execute code after integration.
+
+        After this point there are no guarantees that the Context will still
+        exist, together with its bound integrator and system.
+        """
+        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
+                             enforcePeriodicBox=thermodynamic_state.is_periodic)
+        self.final_context_state = copy.deepcopy(context_state)
+        self.final_energy = thermodynamic_state.reduced_potential(context)
+        self.final_positions = context_state.getPositions()
+        #print("MD_PE_f", self.final_energy)
+        #print("MD_f", self.final_positions)
+
+    def apply(self, thermodynamic_state, sampler_state, reporter):
+        """Propagate the state through the integrator.
+
+        This updates the SamplerState after the integration. It also logs
+        benchmarking information through the utils.Timer class.
+
+        Parameters
+        ----------
+        thermodynamic_state : openmmtools.states.ThermodynamicState
+           The thermodynamic state to use to propagate dynamics.
+        sampler_state : openmmtools.states.SamplerState
+           The sampler state to apply the move to. This is modified.
+
+        See Also
+        --------
+        openmmtools.utils.Timer
+
+        """
+        timer = Timer()
+        move_name = self.__class__.__name__
+        timer.start(move_name)
+
+        # Check if we have to use the global cache.
+        if self.context_cache is None:
+            context_cache = cache.global_context_cache
+        else:
+            context_cache = self.context_cache
+
+        # Create integrator.
+        integrator = self._get_integrator(thermodynamic_state)
+
+        # Create context.
+        timer.start("{}: Context request".format(move_name))
+        context, integrator = context_cache.get_context(thermodynamic_state, integrator)
+        thermodynamic_state.apply_to_context(context)
+        timer.stop("{}: Context request".format(move_name))
+
+        #logger.debug("{}: Context obtained, platform is {}".format(
+        #    move_name, context.getPlatform().getName()))
+
+        # Perform the integration.
+        for attempt_counter in range(self.n_restart_attempts + 1):
+
+            # If we reassign velocities, we can ignore the ones in sampler_state.
+            sampler_state.apply_to_context(context, ignore_velocities=self.reassign_velocities)
+            if self.reassign_velocities:
+                context.setVelocitiesToTemperature(thermodynamic_state.temperature)
+
+            # Subclasses may implement _before_integration().
+            self._before_integration(context, integrator, thermodynamic_state)
+
+            try:
+                # Run dynamics.
+                timer.start("{}: step({})".format(move_name, self.n_steps))
+                for n in range(1,self.n_steps+1):
+                    integrator.step(1)
+
+                    if n % reporter._reportInterval == 0:
+                        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,enforcePeriodicBox=thermodynamic_state.is_periodic)
+                        print('Reporting MD step:', n)
+                        reporter.report(context_state, integrator)
+
+            except Exception as e:
+                print(e)
+                # Catches particle positions becoming nan during integration.
+                restart = True
+            else:
+                timer.stop("{}: step({})".format(move_name, self.n_steps))
+
+                # We get also velocities here even if we don't need them because we
+                # will recycle this State to update the sampler state object. This
+                # way we won't need a second call to Context.getState().
+                context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
+                                                 enforcePeriodicBox=thermodynamic_state.is_periodic)
+
+                # Check for NaNs in energies.
+                potential_energy = context_state.getPotentialEnergy()
+                restart = np.isnan(potential_energy.value_in_unit(potential_energy.unit))
+
+            # Restart the move if we found NaNs.
+            if restart:
+                err_msg = ('Potential energy is NaN after {} attempts of integration '
+                           'with move {}'.format(attempt_counter, self.__class__.__name__))
+
+                # If we are on our last chance before crash, try to re-initialize context
+                if attempt_counter == self.n_restart_attempts - 1:
+                    logger.error(err_msg + ' Trying to reinitialize Context as a last-resort restart attempt...')
+                    context.reinitialize()
+                    sampler_state.apply_to_context(context)
+                    thermodynamic_state.apply_to_context(context)
+                # If we have hit the number of restart attempts, raise an exception.
+                elif attempt_counter == self.n_restart_attempts:
+                    # Restore the context to the state right before the integration.
+                    sampler_state.apply_to_context(context)
+                    logger.error(err_msg)
+                    raise IntegratorMoveError(err_msg, self, context)
+                else:
+                    logger.warning(err_msg + ' Attempting a restart...')
+            else:
+                break
+
+
+
+        # Updated sampler state.
+        #timer.start("{}: update sampler state".format(move_name))
+        # This is an optimization around the fact that Collective Variables are not a part of the State,
+        # but are a part of the Context. We do this call twice to minimize duplicating information fetched from
+        # the State.
+        # Update everything but the collective variables from the State object
+        sampler_state.update_from_context(context_state, ignore_collective_variables=True)
+        # Update only the collective variables from the Context
+        sampler_state.update_from_context(context, ignore_positions=True, ignore_velocities=True,
+                                          ignore_collective_variables=False)
+        #timer.stop("{}: update sampler state".format(move_name))
+
+        # Subclasses can read here info from the context to update internal statistics.
+        self._after_integration(context, thermodynamic_state)
+
+        # Print timing information.
+        timer.stop(move_name)
+        timer.report_timing()
 
 class MetropolizedNCMCMove(MetropolizedMove):
     """This is the base Move class. Move provides methods for calculating properties
@@ -88,14 +232,6 @@ class MetropolizedNCMCMove(MetropolizedMove):
         self.final_positions = value['final_positions']
         self.logp_accept = value['logp_accept']
 
-    def _create_dummy_simulation(self, integrator, system, topology):
-        """
-        Generate a dummy Simulation object because the Reporter
-        expects an `openmm.Simulation` object in order to report information
-        from it's respective attached integrator/
-        """
-        return DummySimulation(integrator, system, topology)
-
     def _before_integration(self, context, integrator, thermodynamic_state, sampler_state):
         """Execute code after Context creation and before integration."""
 
@@ -119,15 +255,9 @@ class MetropolizedNCMCMove(MetropolizedMove):
 
         initial_energy = thermodynamic_state.reduced_potential(context)
 
-        simulation = self._create_dummy_simulation(integrator,
-                                            thermodynamic_state.get_system(),
-                                            thermodynamic_state.topology)
-
         self.atom_subset = atom_subset
         self.initial_positions = initial_positions
         self.initial_energy = initial_energy
-        self.kT = integrator.kT
-        self.simulation = simulation
 
     def _after_integration(self, context, thermodynamic_state, sampler_state):
         """Implement BaseIntegratorMove._after_integration()."""
@@ -202,16 +332,15 @@ class MetropolizedNCMCMove(MetropolizedMove):
                     alch_lambda = integrator.getGlobalVariableByName('lambda')
                     lambda_step = integrator.getGlobalVariableByName('lambda_step')
                     protocol_work = integrator.getGlobalVariableByName('protocol_work')
+                    logp_accept = integrator.getLogAcceptanceProbability(context)
                     lambda_sterics = context.getParameter('lambda_sterics')
                     lambda_electrostatics = context.getParameter('lambda_electrostatics')
-                    logp_accept = context._integrator.getLogAcceptanceProbability(context)
 
                     thermodynamic_state.set_alchemical_variable('lambda', alch_lambda)
                     thermodynamic_state.set_function_variable('lambda', alch_lambda)
                     thermodynamic_state.lambda_sterics = lambda_sterics
                     thermodynamic_state.lambda_electrostatics = lambda_electrostatics
                     thermodynamic_state.apply_to_context(context)
-
 
                     if n == rotation_step:
                         # Propose perturbed positions. Modifying the reference changes the sampler state.
@@ -226,8 +355,14 @@ class MetropolizedNCMCMove(MetropolizedMove):
 
                     if n % reporter._reportInterval == 0:
                         context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True, enforcePeriodicBox=thermodynamic_state.is_periodic)
-                        print('N', n, 'Step:', step, 'PE:', context_state.getPotentialEnergy(), 'Work:', protocol_work,
-                              '\n', 'Lambda: ', alch_lambda, 'Sterics:', lambda_sterics, 'Elec:', lambda_electrostatics,"\n Log Acceptance P:", logp_accept )
+                        data = { 'step' : step,
+                                 'lambda' : alch_lambda,
+                                 'lambda_sterics' : lambda_sterics,
+                                 'lambda_electrostatics' : lambda_electrostatics,
+                                 'PE' : context_state.getPotentialEnergy()._value,
+                                 'work' : protocol_work,
+                                 'logp_accept' : logp_accept }
+                        print("Step: {step} Lambda: {lambda:.2f} Sterics: {lambda_sterics:.2f} Elec: {lambda_electrostatics:.2f} Work: {work:.2f} LogP: {logp_accept:.2f}".format(**data))
                         reporter.report(context_state, integrator)
 
             except Exception as e:
@@ -275,7 +410,7 @@ class MetropolizedNCMCMove(MetropolizedMove):
 
         # Print timing information.
         timer.stop(benchmark_id)
-        #timer.report_timing()
+        timer.report_timing()
 
     @abc.abstractmethod
     def _propose_positions(self, positions):
@@ -335,162 +470,7 @@ class RandomLigandRotationMove(MetropolizedNCMCMove):
 
         return proposed_positions
 
-class ModLangevinDynamicsMove(LangevinDynamicsMove):
 
-    def _create_dummy_simulation(self, integrator, system, topology):
-        """
-        Generate a dummy Simulation object because the Reporter
-        expects an `openmm.Simulation` object in order to report information
-        from it's respective attached integrator/
-        """
-        return DummySimulation(integrator, system, topology)
-
-    def _before_integration(self, context, integrator, thermodynamic_state):
-        """Execute code after Context creation and before integration."""
-        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                             enforcePeriodicBox=thermodynamic_state.is_periodic)
-        self.simulation = self._create_dummy_simulation(integrator,
-                                            thermodynamic_state.get_system(),
-                                            thermodynamic_state.topology)
-        self.initial_context_state = copy.deepcopy(context_state)
-        self.initial_energy = thermodynamic_state.reduced_potential(context)
-        self.initial_positions = context_state.getPositions()
-        print("MD_PE_i", self.initial_energy)
-        #print("MD_i", self.initial_positions)
-
-    def _after_integration(self, context, thermodynamic_state):
-        """Execute code after integration.
-
-        After this point there are no guarantees that the Context will still
-        exist, together with its bound integrator and system.
-        """
-        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                             enforcePeriodicBox=thermodynamic_state.is_periodic)
-        self.final_context_state = copy.deepcopy(context_state)
-        self.final_energy = thermodynamic_state.reduced_potential(context)
-        self.final_positions = context_state.getPositions()
-        print("MD_PE_f", self.final_energy)
-        #print("MD_f", self.final_positions)
-
-    def apply(self, thermodynamic_state, sampler_state, reporter):
-        """Propagate the state through the integrator.
-
-        This updates the SamplerState after the integration. It also logs
-        benchmarking information through the utils.Timer class.
-
-        Parameters
-        ----------
-        thermodynamic_state : openmmtools.states.ThermodynamicState
-           The thermodynamic state to use to propagate dynamics.
-        sampler_state : openmmtools.states.SamplerState
-           The sampler state to apply the move to. This is modified.
-
-        See Also
-        --------
-        openmmtools.utils.Timer
-
-        """
-        move_name = self.__class__.__name__  # shortcut
-        timer = Timer()
-
-        # Check if we have to use the global cache.
-        if self.context_cache is None:
-            context_cache = cache.global_context_cache
-        else:
-            context_cache = self.context_cache
-
-        # Create integrator.
-        integrator = self._get_integrator(thermodynamic_state)
-
-        # Create context.
-        timer.start("{}: Context request".format(move_name))
-        context, integrator = context_cache.get_context(thermodynamic_state, integrator)
-        thermodynamic_state.apply_to_context(context)
-
-        timer.stop("{}: Context request".format(move_name))
-        #logger.debug("{}: Context obtained, platform is {}".format(
-        #    move_name, context.getPlatform().getName()))
-
-        # Perform the integration.
-        for attempt_counter in range(self.n_restart_attempts + 1):
-
-            # If we reassign velocities, we can ignore the ones in sampler_state.
-            sampler_state.apply_to_context(context, ignore_velocities=self.reassign_velocities)
-            if self.reassign_velocities:
-                print("Resetting velocities in MD")
-                context.setVelocitiesToTemperature(thermodynamic_state.temperature)
-
-            # Subclasses may implement _before_integration().
-            self._before_integration(context, integrator, thermodynamic_state)
-
-            try:
-                # Run dynamics.
-                timer.start("{}: step({})".format(move_name, self.n_steps))
-                for n in range(1,self.n_steps+1):
-                    integrator.step(1)
-
-                    if n % reporter._reportInterval == 0:
-                        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,enforcePeriodicBox=thermodynamic_state.is_periodic)
-                        print('Reporting MD step:', n)
-                        reporter.report(context_state, integrator)
-
-            except Exception as e:
-                print(e)
-                # Catches particle positions becoming nan during integration.
-                restart = True
-            else:
-                timer.stop("{}: step({})".format(move_name, self.n_steps))
-
-                # We get also velocities here even if we don't need them because we
-                # will recycle this State to update the sampler state object. This
-                # way we won't need a second call to Context.getState().
-                context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                                                 enforcePeriodicBox=thermodynamic_state.is_periodic)
-
-                # Check for NaNs in energies.
-                potential_energy = context_state.getPotentialEnergy()
-                restart = np.isnan(potential_energy.value_in_unit(potential_energy.unit))
-
-            # Restart the move if we found NaNs.
-            if restart:
-                err_msg = ('Potential energy is NaN after {} attempts of integration '
-                           'with move {}'.format(attempt_counter, self.__class__.__name__))
-
-                # If we are on our last chance before crash, try to re-initialize context
-                if attempt_counter == self.n_restart_attempts - 1:
-                    logger.error(err_msg + ' Trying to reinitialize Context as a last-resort restart attempt...')
-                    context.reinitialize()
-                    sampler_state.apply_to_context(context)
-                    thermodynamic_state.apply_to_context(context)
-                # If we have hit the number of restart attempts, raise an exception.
-                elif attempt_counter == self.n_restart_attempts:
-                    # Restore the context to the state right before the integration.
-                    sampler_state.apply_to_context(context)
-                    logger.error(err_msg)
-                    raise IntegratorMoveError(err_msg, self, context)
-                else:
-                    logger.warning(err_msg + ' Attempting a restart...')
-            else:
-                break
-
-
-
-        # Updated sampler state.
-        timer.start("{}: update sampler state".format(move_name))
-        # This is an optimization around the fact that Collective Variables are not a part of the State,
-        # but are a part of the Context. We do this call twice to minimize duplicating information fetched from
-        # the State.
-        # Update everything but the collective variables from the State object
-        sampler_state.update_from_context(context_state, ignore_collective_variables=True)
-        # Update only the collective variables from the Context
-        sampler_state.update_from_context(context, ignore_positions=True, ignore_velocities=True,
-                                          ignore_collective_variables=False)
-        timer.stop("{}: update sampler state".format(move_name))
-
-        # Subclasses can read here info from the context to update internal statistics.
-        self._after_integration(context, thermodynamic_state)
-
-        #timer.report_timing()
 
 # class MoveEngine(object):
 #     """MoveEngine provides perturbation functions for the context during the NCMC

@@ -1334,7 +1334,7 @@ class NCMCSampler(object):
         alch_energy = self.thermodynamic_state.reduced_potential(context)
 
         correction_factor = (self.ncmc_move.initial_energy - self.langevin_move.final_energy
-                     + alch_energy - self.ncmc_move.final_energy) #*-1.0#* (-1.0 / self.ncmc_move.kT) * unit.kilojoules_per_mole
+                     + alch_energy - self.ncmc_move.final_energy)
 
         work_ncmc = self.ncmc_move.logp_accept
         randnum = math.log(np.random.random())
@@ -1405,10 +1405,6 @@ class NCMCSampler(object):
         if self.verbose:
             print("." * 80)
 
-    def equil(self):
-        self.minimize()
-        self._stepMD()
-
     def run(self, n_iterations=1):
         """
         Run the sampler for the specified number of iterations
@@ -1417,7 +1413,8 @@ class NCMCSampler(object):
         niterations : int, optional, default=1
             Number of iterations to run the sampler for.
         """
-
+        # Set initial conditions
+        self._stepMD()
         for iteration in range(n_iterations):
             self.update()
 

@@ -19,7 +19,7 @@ logger.setLevel(logging.DEBUG)
 logging.getLogger("parmed").setLevel(logging.ERROR)
 logging.getLogger("openmmtools.alchemy").setLevel(logging.ERROR)
 np.random.RandomState(seed=3134)
-logging.basicConfig(format='%(asctime)s | %(levelname)s : %(message)s', level=logging.INFO, stream=sys.stdout)
+#logging.basicConfig(format='%(asctime)s | %(levelname)s : %(message)s', level=logging.INFO, stream=sys.stdout)
 
 # Define parameters
 temperature = 300 * unit.kelvin
@@ -66,7 +66,6 @@ if os.path.exists(filename):
     os.remove(filename)
 else:
     print("Sorry, I can not remove %s file." % filename)
-#nc_reporter = NetCDF4Reporter(filename, reportInterval)
 nc_reporter = NetCDF4Storage(filename, reportInterval)
 
 sampler = NCMCSampler(alchemical_atoms, thermodynamic_state, alch_thermodynamic_state,
@@ -74,5 +73,5 @@ sampler = NCMCSampler(alchemical_atoms, thermodynamic_state, alch_thermodynamic_
                  reporter=nc_reporter, topology=tol.topology)
 
 
-sampler.equil()
+sampler.minimize()
 sampler.run(nIter)
