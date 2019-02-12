@@ -10,9 +10,13 @@ Authors: Samuel C. Gill
 Contributors: Nathan M. Lim, Meghan Osato, David L. Mobley
 """
 
+import copy
 import logging
 import math
 import sys
+import time
+from openmmtools import cache
+from openmmtools.utils import Timer
 
 import numpy as np
 import parmed
@@ -1253,6 +1257,221 @@ class BLUESSimulation(object):
         logger.info('Acceptance Ratio: %s' % self.acceptRatio)
         logger.info('nIter: %s ' % nIter)
 
+class NCMCSampler(object):
+
+
+    def __init__(self, atom_subset=None, thermodynamic_state=None, alch_thermodynamic_state=None,
+                 sampler_state=None, move=None, platform=None, reporter=None, topology=None):
+        """
+        Create an MCMC sampler.
+        Parameters
+        ----------
+        thermodynamic_state : ThermodynamicState
+            The thermodynamic state to simulate
+        sampler_state : SamplerState
+            The initial sampler state to simulate from.
+        platform : simtk.openmm.Platform, optional, default=None
+            If specified, this platform will be used
+        ncfile : netCDF4.Dataset, optional, default=None
+            NetCDF storage file.
+        """
+
+        if alch_thermodynamic_state is None:
+            raise Exception("'alch_thermodynamic_state' must be specified")
+        if thermodynamic_state is None:
+            raise Exception("'thermodynamic_state' must be specified")
+        if sampler_state is None:
+            raise Exception("'sampler_state' must be specified")
+
+        self.atom_subset = atom_subset
+        # Make a deep copy of the state so that initial state is unchanged.
+        self.alch_thermodynamic_state = copy.deepcopy(alch_thermodynamic_state)
+        self.thermodynamic_state = copy.deepcopy(thermodynamic_state)
+        self.sampler_state = sampler_state#copy.deepcopy(sampler_state)
+        self.ncmc_move = move[1]
+        self.langevin_move = move[0]
+
+        #NML: Attach topology to thermodynamic_states
+        self.alch_thermodynamic_state.topology = topology
+        self.thermodynamic_state.topology = topology
+
+        # Initialize
+        self.accept = False
+        self.n_accepted = 0
+        #self.reject = 0
+        self.n_proposed = 0
+
+        self.verbose = True
+        self.platform = platform
+
+        # For writing trajectory files
+        self.reporter = reporter
+        self._timing = dict()
+
+    def _stepNCMC(self):
+
+        # SamplerState positions should match last positions from MD
+        check = np.array_equal(self.langevin_move.final_positions, self.sampler_state.positions[self.atom_subset])
+        if not check:
+            print('MD_f_positions %s != Current NCMC_positions %s. Positions should match the prior state.'
+                    % (self.langevin_move.final_positions,self.sampler_state.positions[self.atom_subset]))
+            sys.exit(1)
+
+        # Run NCMC
+        self.ncmc_move.apply(self.alch_thermodynamic_state, self.sampler_state, self.reporter)
+        # Initial positions in NCMC should match final of MD
+        #print("NCMC_i", self.ncmc_move.initial_positions)
+        # Final positions of NCMC (should be different than proposed)
+        #print("NCMC_f", self.sampler_state.positions[self.atom_subset])
+
+    def _acceptRejectMove(self):
+        # Create MD context with the final positions from NCMC simulation
+        context_cache = cache.global_context_cache
+        integrator = self.langevin_move._get_integrator(self.thermodynamic_state)
+        context, integrator = context_cache.get_context(self.thermodynamic_state, integrator)
+        self.sampler_state.apply_to_context(context, ignore_velocities=True)
+        alch_energy = self.thermodynamic_state.reduced_potential(context)
+
+        correction_factor = (self.ncmc_move.initial_energy - self.langevin_move.final_energy
+                     + alch_energy - self.ncmc_move.final_energy) #*-1.0#* (-1.0 / self.ncmc_move.kT) * unit.kilojoules_per_mole
+
+        work_ncmc = self.ncmc_move.logp_accept
+        randnum = math.log(np.random.random())
+        print("work_ncmc {} + corr {}".format(work_ncmc, correction_factor))
+        work_ncmc = work_ncmc + correction_factor
+        #print("work_ncmc", work_ncmc)
+        if (not np.isnan(work_ncmc) and work_ncmc > randnum):
+            print('NCMC MOVE ACCEPTED: work_ncmc {} > randnum {}'.format(work_ncmc, randnum))
+            self.accept = True
+            self.n_accepted += 1
+        else:
+            print('NCMC MOVE REJECTED: work_ncmc {} < {}'.format(work_ncmc, randnum))
+            self.accept = False
+            #print('Sampler_state positions:',self.sampler_state.positions[self.atom_subset])
+            # Restore original positions.
+            self.sampler_state.update_from_context(self.langevin_move.final_context_state, ignore_collective_variables=True)
+            #self.sampler_state.positions[self.atom_subset] = self.ncmc_move.initial_positions
+            #print('Restored Sampler_state positions:',self.sampler_state.positions[self.atom_subset])
+
+
+            # Potential energy should be from last MD step in the previous iteration
+            potential_energy = self.thermodynamic_state.reduced_potential(self.sampler_state)
+            #print("Last PE:", self.langevin_move.final_energy, "Reset PE:", potential_energy)
+            if not math.isclose(self.langevin_move.final_energy, potential_energy, rel_tol=float('1e-%s' % rtol)):
+                print(
+                    'Last MD potential energy %s != Current MD potential energy %s. Potential energy should match the prior state.'
+                    % (self.langevin_move.final_energy, potential_energy))
+                sys.exit(1)
+
+
+    def _stepMD(self):
+        if self.accept:
+            #SamplerState positions should match last NCMC positions
+            check = np.array_equal(self.ncmc_move.final_positions, self.sampler_state.positions[self.atom_subset])
+            #print(check)
+            if not check:
+                print('NCMC_f_positions %s != Current MD_positions %s. Positions should match the prior state.'
+                    % (self.ncmc_move.final_positions, self.sampler_state.positions[self.atom_subset]))
+                sys.exit(1)
+
+        # Run langevin dynamics
+        #print("MD_i", self.sampler_state.positions[self.atom_subset])
+        self.langevin_move.apply(self.thermodynamic_state, self.sampler_state, self.reporter)
+        self.langevin_move.final_positions = self.sampler_state.positions[self.atom_subset]
+        #print("MD_f", self.langevin_move.final_positions)
+
+    def update(self):
+        """
+        Update the sampler with one step of sampling.
+        """
+        if self.verbose:
+            print("." * 80)
+            print("MCMC sampler iteration %d" % self.n_proposed)
+
+        initial_time = time.time()
+
+        self._stepNCMC()
+        self._acceptRejectMove()
+        self._stepMD()
+
+        final_time = time.time()
+        elapsed_time = final_time - initial_time
+        self._timing['sample positions'] = elapsed_time
+
+        # Increment iteration count
+        self.n_proposed += 1
+
+        if self.verbose:
+            print("." * 80)
+
+    def equil(self):
+        self.minimize()
+        self._stepMD()
+
+    def run(self, n_iterations=1):
+        """
+        Run the sampler for the specified number of iterations
+        Parameters
+        ----------
+        niterations : int, optional, default=1
+            Number of iterations to run the sampler for.
+        """
+
+        for iteration in range(n_iterations):
+            self.update()
+            
+        print('n_accepted', self.n_accepted)
+        print('n_proposed', self.n_proposed)
+
+    def minimize(self,
+                 tolerance=1.0 * unit.kilocalories_per_mole / unit.angstroms,
+                 max_iterations=100,
+                 context_cache=None):
+        """Minimize the current configuration.
+
+        Parameters
+        ----------
+        tolerance : simtk.unit.Quantity, optional
+            Tolerance to use for minimization termination criterion (units of
+            energy/(mole*distance), default is 1*kilocalories_per_mole/angstroms).
+        max_iterations : int, optional
+            Maximum number of iterations to use for minimization. If 0, the minimization
+            will continue until convergence (default is 100).
+        context_cache : openmmtools.cache.ContextCache, optional
+            The ContextCache to use for Context creation. If None, the global cache
+            openmmtools.cache.global_context_cache is used (default is None).
+
+        """
+        if context_cache is None:
+            context_cache = cache.global_context_cache
+        timer = Timer()
+
+        # Use LocalEnergyMinimizer
+        timer.start("Context request")
+        integrator = openmm.VerletIntegrator(1.0*unit.femtosecond)
+        context, integrator = context_cache.get_context(self.thermodynamic_state, integrator)
+        self.sampler_state.apply_to_context(context)
+        logger.debug("LocalEnergyMinimizer: platform is %s" % context.getPlatform().getName())
+        logger.debug("Minimizing with tolerance %s and %d max. iterations." % (tolerance, max_iterations))
+        timer.stop("Context request")
+
+        timer.start("LocalEnergyMinimizer minimize")
+        openmm.LocalEnergyMinimizer.minimize(context, tolerance, max_iterations)
+        timer.stop("LocalEnergyMinimizer minimize")
+
+        # Retrieve data.
+        self.sampler_state.update_from_context(context)
+
+        context_state = context.getState(
+            getPositions=True,
+            getVelocities=True,
+            getEnergy=True,
+            enforcePeriodicBox=self.thermodynamic_state.is_periodic)
+        potential_energy = context_state.getPotentialEnergy()
+        print(potential_energy)
+
+
+        #timer.report_timing()
 
 class MonteCarloSimulation(BLUESSimulation):
     """Simulation class provides the functions that perform the MonteCarlo run.
