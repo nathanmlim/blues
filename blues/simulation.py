@@ -1310,7 +1310,7 @@ class NCMCSampler(object):
         self._timing = dict()
 
     def _stepNCMC(self):
-
+        print('NCMC Simulation')
         # SamplerState positions should match last positions from MD
         check = np.array_equal(self.langevin_move.final_positions, self.sampler_state.positions[self.atom_subset])
         if not check:
@@ -1366,6 +1366,7 @@ class NCMCSampler(object):
 
 
     def _stepMD(self):
+        print('MD Simulation')
         if self.accept:
             #SamplerState positions should match last NCMC positions
             check = np.array_equal(self.ncmc_move.final_positions, self.sampler_state.positions[self.atom_subset])

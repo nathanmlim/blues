@@ -41,12 +41,12 @@ try:
 except ImportError:
     print('ImportError: Could not import openeye-toolkits. SideChainMove class will be unavailable.')
 
-class ModLangevinDynamicsMove(LangevinDynamicsMove):
 
+class ModLangevinDynamicsMove(LangevinDynamicsMove):
     def _before_integration(self, context, integrator, thermodynamic_state):
         """Execute code after Context creation and before integration."""
-        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                             enforcePeriodicBox=thermodynamic_state.is_periodic)
+        context_state = context.getState(
+            getPositions=True, getVelocities=True, getEnergy=True, enforcePeriodicBox=thermodynamic_state.is_periodic)
 
         self.initial_context_state = copy.deepcopy(context_state)
         self.initial_energy = thermodynamic_state.reduced_potential(context)
@@ -60,15 +60,15 @@ class ModLangevinDynamicsMove(LangevinDynamicsMove):
         After this point there are no guarantees that the Context will still
         exist, together with its bound integrator and system.
         """
-        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                             enforcePeriodicBox=thermodynamic_state.is_periodic)
+        context_state = context.getState(
+            getPositions=True, getVelocities=True, getEnergy=True, enforcePeriodicBox=thermodynamic_state.is_periodic)
         self.final_context_state = copy.deepcopy(context_state)
         self.final_energy = thermodynamic_state.reduced_potential(context)
         self.final_positions = context_state.getPositions()
         #print("MD_PE_f", self.final_energy)
         #print("MD_f", self.final_positions)
 
-    def apply(self, thermodynamic_state, sampler_state, reporter):
+    def apply(self, thermodynamic_state, sampler_state, reporters):
         """Propagate the state through the integrator.
 
         This updates the SamplerState after the integration. It also logs
@@ -122,13 +122,21 @@ class ModLangevinDynamicsMove(LangevinDynamicsMove):
             try:
                 # Run dynamics.
                 timer.start("{}: step({})".format(move_name, self.n_steps))
-                for n in range(1,self.n_steps+1):
+                for n in range(1, self.n_steps + 1):
                     integrator.step(1)
 
-                    if n % reporter._reportInterval == 0:
-                        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,enforcePeriodicBox=thermodynamic_state.is_periodic)
-                        print('Reporting MD step:', n)
-                        reporter.report(context_state, integrator)
+                    if n % reporters[0]._reportInterval == 0:
+                        context_state = context.getState(
+                            getPositions=True,
+                            getVelocities=True,
+                            getEnergy=True,
+                            enforcePeriodicBox=thermodynamic_state.is_periodic)
+                        #print('Reporting MD step:', n)
+                        context_state.currentStep = n
+
+                        context_state.system = thermodynamic_state.system
+                        for reporter in reporters:
+                            reporter.report(context_state, integrator)
 
             except Exception as e:
                 print(e)
@@ -140,8 +148,11 @@ class ModLangevinDynamicsMove(LangevinDynamicsMove):
                 # We get also velocities here even if we don't need them because we
                 # will recycle this State to update the sampler state object. This
                 # way we won't need a second call to Context.getState().
-                context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                                                 enforcePeriodicBox=thermodynamic_state.is_periodic)
+                context_state = context.getState(
+                    getPositions=True,
+                    getVelocities=True,
+                    getEnergy=True,
+                    enforcePeriodicBox=thermodynamic_state.is_periodic)
 
                 # Check for NaNs in energies.
                 potential_energy = context_state.getPotentialEnergy()
@@ -169,8 +180,6 @@ class ModLangevinDynamicsMove(LangevinDynamicsMove):
             else:
                 break
 
-
-
         # Updated sampler state.
         #timer.start("{}: update sampler state".format(move_name))
         # This is an optimization around the fact that Collective Variables are not a part of the State,
@@ -179,8 +188,8 @@ class ModLangevinDynamicsMove(LangevinDynamicsMove):
         # Update everything but the collective variables from the State object
         sampler_state.update_from_context(context_state, ignore_collective_variables=True)
         # Update only the collective variables from the Context
-        sampler_state.update_from_context(context, ignore_positions=True, ignore_velocities=True,
-                                          ignore_collective_variables=False)
+        sampler_state.update_from_context(
+            context, ignore_positions=True, ignore_velocities=True, ignore_collective_variables=False)
         #timer.stop("{}: update sampler state".format(move_name))
 
         # Subclasses can read here info from the context to update internal statistics.
@@ -189,6 +198,7 @@ class ModLangevinDynamicsMove(LangevinDynamicsMove):
         # Print timing information.
         timer.stop(move_name)
         timer.report_timing()
+
 
 class MetropolizedNCMCMove(MetropolizedMove):
     """This is the base Move class. Move provides methods for calculating properties
@@ -212,14 +222,15 @@ class MetropolizedNCMCMove(MetropolizedMove):
     @property
     def statistics(self):
         """The acceptance statistics as a dictionary."""
-        return dict(n_accepted=self.n_accepted,
-                    n_proposed=self.n_proposed,
-                    initial_energy=self.initial_energy,
-                    initial_positions=self.initial_positions,
-                   final_energy=self.final_energy,
-                   proposed_positions=self.proposed_positions,
-                   final_positions=self.final_positions,
-                   logp_accept=self.logp_accept)
+        return dict(
+            n_accepted=self.n_accepted,
+            n_proposed=self.n_proposed,
+            initial_energy=self.initial_energy,
+            initial_positions=self.initial_positions,
+            final_energy=self.final_energy,
+            proposed_positions=self.proposed_positions,
+            final_positions=self.final_positions,
+            logp_accept=self.logp_accept)
 
     @statistics.setter
     def statistics(self, value):
@@ -240,7 +251,7 @@ class MetropolizedNCMCMove(MetropolizedMove):
             atom_subset = slice(None)
         elif not isinstance(self.atom_subset, slice) and len(self.atom_subset) == 1:
             # Slice so that initial_positions (below) will have a 2D shape.
-            atom_subset = slice(self.atom_subset[0], self.atom_subset[0]+1)
+            atom_subset = slice(self.atom_subset[0], self.atom_subset[0] + 1)
         else:
             atom_subset = self.atom_subset
 
@@ -271,18 +282,20 @@ class MetropolizedNCMCMove(MetropolizedMove):
 
     def _get_integrator(self, thermodynamic_state):
         return AlchemicalExternalLangevinIntegrator(
-            alchemical_functions={ 'lambda_sterics':
+            alchemical_functions={
+                'lambda_sterics':
                 'min(1, (1/0.3)*abs(lambda-0.5))',
                 'lambda_electrostatics':
-                'step(0.2-lambda) - 1/0.2*lambda*step(0.2-lambda) + 1/0.2*(lambda-0.8)*step(lambda-0.8)'},
+                'step(0.2-lambda) - 1/0.2*lambda*step(0.2-lambda) + 1/0.2*(lambda-0.8)*step(lambda-0.8)'
+            },
             splitting="H V R O R V H",
             temperature=thermodynamic_state.temperature,
             nsteps_neq=self.n_steps,
             timestep=4.0 * unit.femtoseconds,
-            nprop=3,
+            nprop=1,
             prop_lambda=0.3)
 
-    def apply(self, thermodynamic_state, sampler_state, reporter):
+    def apply(self, thermodynamic_state, sampler_state, reporters):
         """Apply a metropolized move to the sampler state.
 
         Total number of acceptances and proposed move are updated.
@@ -296,7 +309,7 @@ class MetropolizedNCMCMove(MetropolizedMove):
 
         """
         timer = Timer()
-        benchmark_id = 'Applying {}'.format(self.__class__.__name__ )
+        benchmark_id = 'Applying {}'.format(self.__class__.__name__)
         timer.start(benchmark_id)
 
         # Check if we have to use the global cache.
@@ -324,8 +337,8 @@ class MetropolizedNCMCMove(MetropolizedMove):
                 # Run dynamics
                 #NML: Do in 1 steps for debugging
                 timer.start("{}: step({})".format(benchmark_id, self.n_steps))
-                rotation_step = int(self.n_steps/2)
-                for n in range(1,self.n_steps+1):
+                rotation_step = int(self.n_steps / 2)
+                for n in range(1, self.n_steps + 1):
                     integrator.step(1)
 
                     step = integrator.getGlobalVariableByName('step')
@@ -353,17 +366,27 @@ class MetropolizedNCMCMove(MetropolizedMove):
                         sampler_state.apply_to_context(context, ignore_velocities=True)
                         #print('Sampler_positions', sampler_state.positions[atom_subset])
 
-                    if n % reporter._reportInterval == 0:
-                        context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True, enforcePeriodicBox=thermodynamic_state.is_periodic)
-                        data = { 'step' : step,
-                                 'lambda' : alch_lambda,
-                                 'lambda_sterics' : lambda_sterics,
-                                 'lambda_electrostatics' : lambda_electrostatics,
-                                 'PE' : context_state.getPotentialEnergy()._value,
-                                 'work' : protocol_work,
-                                 'logp_accept' : logp_accept }
-                        print("Step: {step} Lambda: {lambda:.2f} Sterics: {lambda_sterics:.2f} Elec: {lambda_electrostatics:.2f} Work: {work:.2f} LogP: {logp_accept:.2f}".format(**data))
-                        reporter.report(context_state, integrator)
+                    if n % reporters[1]._reportInterval == 0:
+                        context_state = context.getState(
+                            getPositions=True,
+                            getVelocities=True,
+                            getEnergy=True,
+                            enforcePeriodicBox=thermodynamic_state.is_periodic)
+                        data = {
+                            'step': step,
+                            'lambda': alch_lambda,
+                            'lambda_sterics': lambda_sterics,
+                            'lambda_electrostatics': lambda_electrostatics,
+                            'PE': context_state.getPotentialEnergy()._value,
+                            'work': protocol_work,
+                            'logp_accept': logp_accept
+                        }
+                        print(
+                            "Step: {step} Lambda: {lambda:.2f} Sterics: {lambda_sterics:.2f} Elec: {lambda_electrostatics:.2f} Work: {work:.2f} LogP: {logp_accept:.2f}"
+                            .format(**data))
+                        context_state.currentStep = n
+                        context_state.system = thermodynamic_state.system
+                        reporters[1].report(context_state, integrator)
 
             except Exception as e:
                 print(e)
@@ -372,14 +395,18 @@ class MetropolizedNCMCMove(MetropolizedMove):
             else:
                 timer.stop("{}: step({})".format(benchmark_id, self.n_steps))
 
-                 # Update everything but the collective variables from the State object
-                sampler_state.update_from_context(context_state, ignore_collective_variables=True, ignore_velocities=True)
+                # Update everything but the collective variables from the State object
+                sampler_state.update_from_context(
+                    context_state, ignore_collective_variables=True, ignore_velocities=True)
                 # Update only the collective variables from the Context
-                sampler_state.update_from_context(context, ignore_positions=True, ignore_velocities=True,
-                                                  ignore_collective_variables=False)
+                sampler_state.update_from_context(
+                    context, ignore_positions=True, ignore_velocities=True, ignore_collective_variables=False)
                 #timer.stop("{}: update sampler state".format(benchmark_id))
-                context_state = context.getState(getPositions=True, getVelocities=True, getEnergy=True,
-                                     enforcePeriodicBox=thermodynamic_state.is_periodic)
+                context_state = context.getState(
+                    getPositions=True,
+                    getVelocities=True,
+                    getEnergy=True,
+                    enforcePeriodicBox=thermodynamic_state.is_periodic)
                 # Check for NaNs in energies.
                 potential_energy = context_state.getPotentialEnergy()
                 restart = np.isnan(potential_energy.value_in_unit(potential_energy.unit))
@@ -432,10 +459,11 @@ class MetropolizedNCMCMove(MetropolizedMove):
         """
         pass
 
-class RandomLigandRotationMove(MetropolizedNCMCMove):
 
+class RandomLigandRotationMove(MetropolizedNCMCMove):
     def _before_integration(self, context, integrator, thermodynamic_state, sampler_state):
-        super(RandomLigandRotationMove, self)._before_integration(context, integrator, thermodynamic_state, sampler_state)
+        super(RandomLigandRotationMove, self)._before_integration(context, integrator, thermodynamic_state,
+                                                                  sampler_state)
         masses, totalmass = utils.getMasses(self.atom_subset, thermodynamic_state.topology)
         self.masses = masses
 
@@ -469,7 +497,6 @@ class RandomLigandRotationMove(MetropolizedNCMCMove):
         proposed_positions = np.dot(reduced_pos, rand_rotation_matrix) * positions.unit + center_of_mass
 
         return proposed_positions
-
 
 
 # class MoveEngine(object):

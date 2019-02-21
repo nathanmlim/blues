@@ -10,7 +10,7 @@ import os, sys, copy
 import numpy as np
 from blues.moves import RandomLigandRotationMove, ModLangevinDynamicsMove
 from blues.simulation import NCMCSampler, SystemFactory
-from blues.reporters import NetCDF4Reporter, NetCDF4Storage
+from blues.reporters import NetCDF4Reporter, NetCDF4Storage, BLUESStateDataStorage
 
 finfo = np.finfo(np.float32)
 rtol = finfo.precision
@@ -25,10 +25,10 @@ np.random.RandomState(seed=3134)
 temperature = 300 * unit.kelvin
 collision_rate = 1 / unit.picoseconds
 timestep = 4.0 * unit.femtoseconds
-n_steps = 1000
-reportInterval = 250
-nIter=2
-context_cache = cache.ContextCache(capacity=1)
+n_steps = 10000
+reportInterval = 1000
+nIter=1000
+context_cache = cache.ContextCache(capacity=4)
 prmtop = utils.get_data_filename('blues', 'tests/data/eqToluene.prmtop') #TOL-parm
 inpcrd = utils.get_data_filename('blues', 'tests/data/eqToluene.inpcrd')
 tol = parmed.load_file(prmtop, xyz=inpcrd)
@@ -67,10 +67,13 @@ if os.path.exists(filename):
 else:
     print("Sorry, I can not remove %s file." % filename)
 nc_reporter = NetCDF4Storage(filename, reportInterval)
+from blues.reporters import init_logger
+logger = init_logger(logger)
+state_reporter = BLUESStateDataStorage(file=logger, step=True, reportInterval=reportInterval, progress=True, remainingTime=True, speed=True, totalSteps=n_steps, currentIter=False)
 
 sampler = NCMCSampler(alchemical_atoms, thermodynamic_state, alch_thermodynamic_state,
                  sampler_state, move=[langevin_move, ncmc_move], platform=None,
-                 reporter=nc_reporter, topology=tol.topology)
+                 reporter=[nc_reporter, state_reporter], topology=tol.topology)
 
 
 sampler.minimize()
