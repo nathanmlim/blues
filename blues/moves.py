@@ -12,21 +12,23 @@ Contributors: Nathan M. Lim, Kalistyn Burley, David L. Mobley
 
 import abc
 import copy
+import logging
 import math
 import random
 import sys
 import traceback
-import logging
-import mdtraj
-import numpy as np
-import parmed
-from simtk import unit
-from openmmtools import cache
-from openmmtools.mcmc import MetropolizedMove, LangevinDynamicsMove
-from openmmtools.utils import Timer
 
+import numpy as np
+
+import mdtraj
+import parmed
 from blues import utils
 from blues.integrators import AlchemicalExternalLangevinIntegrator
+from openmmtools import cache
+from openmmtools.mcmc import LangevinDynamicsMove, MetropolizedMove
+from openmmtools.utils import Timer
+from simtk import unit
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -291,7 +293,7 @@ class MetropolizedNCMCMove(MetropolizedMove):
             splitting="H V R O R V H",
             temperature=thermodynamic_state.temperature,
             nsteps_neq=self.n_steps,
-            timestep=4.0 * unit.femtoseconds,
+            timestep=1.0 * unit.femtoseconds,
             nprop=1,
             prop_lambda=0.3)
 
@@ -350,7 +352,7 @@ class MetropolizedNCMCMove(MetropolizedMove):
                     lambda_electrostatics = context.getParameter('lambda_electrostatics')
 
                     thermodynamic_state.set_alchemical_variable('lambda', alch_lambda)
-                    thermodynamic_state.set_function_variable('lambda', alch_lambda)
+                    #thermodynamic_state.set_function_variable('lambda', alch_lambda)
                     thermodynamic_state.lambda_sterics = lambda_sterics
                     thermodynamic_state.lambda_electrostatics = lambda_electrostatics
                     thermodynamic_state.apply_to_context(context)
@@ -366,27 +368,28 @@ class MetropolizedNCMCMove(MetropolizedMove):
                         sampler_state.apply_to_context(context, ignore_velocities=True)
                         #print('Sampler_positions', sampler_state.positions[atom_subset])
 
-                    if n % reporters[1]._reportInterval == 0:
-                        context_state = context.getState(
-                            getPositions=True,
-                            getVelocities=True,
-                            getEnergy=True,
-                            enforcePeriodicBox=thermodynamic_state.is_periodic)
-                        data = {
-                            'step': step,
-                            'lambda': alch_lambda,
-                            'lambda_sterics': lambda_sterics,
-                            'lambda_electrostatics': lambda_electrostatics,
-                            'PE': context_state.getPotentialEnergy()._value,
-                            'work': protocol_work,
-                            'logp_accept': logp_accept
-                        }
-                        print(
-                            "Step: {step} Lambda: {lambda:.2f} Sterics: {lambda_sterics:.2f} Elec: {lambda_electrostatics:.2f} Work: {work:.2f} LogP: {logp_accept:.2f}"
-                            .format(**data))
-                        context_state.currentStep = n
-                        context_state.system = thermodynamic_state.system
-                        reporters[1].report(context_state, integrator)
+                    # if n % reporters[1]._reportInterval == 0:
+                    #     context_state = context.getState(
+                    #         getPositions=True,
+                    #         getVelocities=True,
+                    #         getEnergy=True,
+                    #         enforcePeriodicBox=thermodynamic_state.is_periodic)
+                    #     data = {
+                    #         'step': step,
+                    #         'lambda': alch_lambda,
+                    #         'lambda_sterics': lambda_sterics,
+                    #         'lambda_electrostatics': lambda_electrostatics,
+                    #         'PE': context_state.getPotentialEnergy()._value,
+                    #         'work': protocol_work,
+                    #         'logp_accept': logp_accept
+                    #     }
+                    #     print(
+                    #         "Step: {step} Lambda: {lambda:.2f} Sterics: {lambda_sterics:.2f} Elec: {lambda_electrostatics:.2f} Work: {work:.2f} LogP: {logp_accept:.2f}"
+                    #         .format(**data))
+                    #     context_state.currentStep = n
+                    #     context_state.system = thermodynamic_state.system
+                    #     reporters[1].report(context_state, integrator)
+                        #reporters[0].report(context_state, integrator)
 
             except Exception as e:
                 print(e)
@@ -394,7 +397,11 @@ class MetropolizedNCMCMove(MetropolizedMove):
                 restart = True
             else:
                 timer.stop("{}: step({})".format(benchmark_id, self.n_steps))
-
+                context_state = context.getState(
+                    getPositions=True,
+                    getVelocities=True,
+                    getEnergy=True,
+                    enforcePeriodicBox=thermodynamic_state.is_periodic)
                 # Update everything but the collective variables from the State object
                 sampler_state.update_from_context(
                     context_state, ignore_collective_variables=True, ignore_velocities=True)
@@ -402,11 +409,11 @@ class MetropolizedNCMCMove(MetropolizedMove):
                 sampler_state.update_from_context(
                     context, ignore_positions=True, ignore_velocities=True, ignore_collective_variables=False)
                 #timer.stop("{}: update sampler state".format(benchmark_id))
-                context_state = context.getState(
-                    getPositions=True,
-                    getVelocities=True,
-                    getEnergy=True,
-                    enforcePeriodicBox=thermodynamic_state.is_periodic)
+                # context_state = context.getState(
+                #     getPositions=True,
+                #     getVelocities=True,
+                #     getEnergy=True,
+                #     enforcePeriodicBox=thermodynamic_state.is_periodic)
                 # Check for NaNs in energies.
                 potential_energy = context_state.getPotentialEnergy()
                 restart = np.isnan(potential_energy.value_in_unit(potential_energy.unit))
